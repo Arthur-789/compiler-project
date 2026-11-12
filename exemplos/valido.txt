@@ -1,0 +1,74 @@
+program Exemplo;
+
+var x int;
+var y int;
+var ativo bool;
+
+proc cabecalho()
+{
+    print("INICIO DO PROGRAMA");
+}
+
+func calcularSoma(a int, b int) int
+{
+    var resultado int;
+    resultado = a + b;
+    return resultado;
+}
+
+func verificarMaior(val int) bool
+{
+    var res bool;
+    if val > 10 {
+        res = true;
+    } else {
+        res = false;
+    }
+    return res;
+}
+
+proc executarLoop()
+{
+    var contador int;
+    contador = 0;
+    while contador < 5 {
+        if contador == 2 {
+            contador = contador + 1;
+            continue;
+        } else {
+            if contador == 4 {
+                break;
+            } else {
+                print(contador);
+            }
+        }
+        contador = contador + 1;
+    }
+}
+
+{
+    cabecalho();
+
+    x = 15;
+    y = 10;
+
+    ativo = (x >= y) and (y != 0) or !false;
+
+    if ativo {
+        print("Ativo e verdadeiro!");
+    } else {
+        print("Inativo");
+    }
+
+    x = calcularSoma(x, 5);
+    print(x);
+
+    if verificarMaior(x) {
+        print("X e maior que 10");
+    } else {
+        print("X e menor ou igual a 10");
+    }
+
+    executarLoop();
+}
+.

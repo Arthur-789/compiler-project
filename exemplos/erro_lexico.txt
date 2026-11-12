@@ -1,0 +1,6 @@
+program Erro;
+var x int;
+{
+    x = 5 @ 3;
+}
+.
