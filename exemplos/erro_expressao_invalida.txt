@@ -1,0 +1,8 @@
+program ErroExpressao;
+
+var x int;
+
+{
+    x = 1 < 2 < 3;
+}
+.

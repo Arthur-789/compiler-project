@@ -1,0 +1,6 @@
+program ErroCadeia;
+
+{
+    print("esta cadeia nao foi fechada);
+}
+.

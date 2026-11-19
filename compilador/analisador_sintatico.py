@@ -1,43 +1,61 @@
 # Analisador sintático descendente recursivo (LL(1)).
 # Cada regra da BNF corresponde a um método. Em caso de erro, lança ErroSintatico.
 
-PRIMEIRO_COMANDO = {"IDENT", "return", "break", "continue", "print", "if", "while", "{"}
-PRIMEIRO_EXPRESSAO = {"IDENT", "NUM", "true", "false", "(", "!", "-"}
-OPERADORES_RELACIONAIS = {"==", "!=", ">", ">=", "<", "<="}
+from __future__ import annotations
 
-NOMES = {"IDENT": "identificador", "NUM": "número", "CADEIA": "cadeia", "EOF": "fim do arquivo"}
+from typing import Dict, List, NoReturn, Optional, Sequence, Set
+
+from .tokens import Token
+
+PRIMEIRO_COMANDO: Set[str] = {
+    "IDENT", "return", "break", "continue", "print", "if", "while", "{"
+}
+PRIMEIRO_EXPRESSAO: Set[str] = {"IDENT", "NUM", "true", "false", "(", "!", "-"}
+OPERADORES_RELACIONAIS: Set[str] = {"==", "!=", ">", ">=", "<", "<="}
+
+NOMES: Dict[str, str] = {
+    "IDENT": "identificador",
+    "NUM": "número",
+    "CADEIA": "cadeia",
+    "EOF": "fim do arquivo",
+}
 
 
-def _nome(tipo):
+def _nome(tipo: str) -> str:
     return NOMES.get(tipo, f"'{tipo}'")
 
 
 class ErroSintatico(Exception):
-    pass
+    def __init__(
+        self, mensagem: str, erros: Optional[List["ErroSintatico"]] = None
+    ) -> None:
+        super().__init__(mensagem)
+        self.erros = erros if erros is not None else [self]
 
 
 class AnalisadorSintatico:
-    def __init__(self, tokens):
+    def __init__(self, tokens: Sequence[Token]) -> None:
         self.tokens = tokens
         self.pos = 0
+        self.erros: List[ErroSintatico] = []
 
     # ---------- utilidades ----------
     @property
-    def atual(self):
+    def atual(self) -> Token:
         return self.tokens[self.pos]
 
-    def _avancar(self):
+    def _avancar(self) -> Token:
         tok = self.tokens[self.pos]
         if tok.tipo != "EOF":
             self.pos += 1
         return tok
 
-    def _consumir(self, tipo):
+    def _consumir(self, tipo: str) -> Token:
         if self.atual.tipo == tipo:
             return self._avancar()
         self._erro(_nome(tipo))
 
-    def _erro(self, esperado):
+    def _erro(self, esperado: str) -> NoReturn:
         tok = self.atual
         if tok.tipo == "EOF":
             encontrado = "fim do arquivo"
@@ -45,16 +63,37 @@ class AnalisadorSintatico:
             encontrado = f'cadeia "{tok.lexema}"'
         else:
             encontrado = f"'{tok.lexema}'"
-        raise ErroSintatico(
-            f"Linha {tok.linha}, coluna {tok.coluna}: esperado {esperado}, encontrado {encontrado}"
+        mensagem = (
+            f"Linha {tok.linha}, coluna {tok.coluna}: "
+            f"esperado {esperado}, encontrado {encontrado}"
         )
+        if tok.trecho:
+            mensagem += f"\n{tok.trecho}\n{' ' * max(tok.coluna - 1, 0)}^"
+        raise ErroSintatico(mensagem)
+
+    def _sincronizar(self) -> None:
+        sincronizacao: Set[str] = {";", "}", "{"}
+        while self.atual.tipo not in sincronizacao and self.atual.tipo != "EOF":
+            self._avancar()
+        if self.atual.tipo == ";":
+            self._avancar()
+
+    def _registrar_e_sincronizar(self, erro: ErroSintatico) -> None:
+        self.erros.append(erro)
+        self._sincronizar()
 
     # ---------- ponto de entrada ----------
-    def analisar(self):
-        self.programa()
+    def analisar(self) -> None:
+        try:
+            self.programa()
+        except ErroSintatico as erro:
+            self._registrar_e_sincronizar(erro)
+        if self.erros:
+            mensagem = "\n\n".join(str(erro) for erro in self.erros)
+            raise ErroSintatico(mensagem, self.erros)
 
     # ---------- estrutura ----------
-    def programa(self):
+    def programa(self) -> None:
         self._consumir("program")
         self._consumir("IDENT")
         self._consumir(";")
@@ -62,29 +101,35 @@ class AnalisadorSintatico:
         self._consumir(".")
         self._consumir("EOF")
 
-    def bloco(self):
+    def bloco(self) -> None:
         while self.atual.tipo == "var":
-            self.declaracao_variavel()
-            self._consumir(";")
+            try:
+                self.declaracao_variavel()
+                self._consumir(";")
+            except ErroSintatico as erro:
+                self._registrar_e_sincronizar(erro)
         while self.atual.tipo in ("proc", "func"):
-            self.declaracao_subrotina()
+            try:
+                self.declaracao_subrotina()
+            except ErroSintatico as erro:
+                self._registrar_e_sincronizar(erro)
         self.comandos()
 
     # ---------- declarações ----------
-    def declaracao_variavel(self):
+    def declaracao_variavel(self) -> None:
         self._consumir("var")
         self._consumir("IDENT")
         self.tipo()
 
-    def tipo(self):
+    def tipo(self) -> None:
         if self.atual.tipo in ("int", "bool"):
             self._avancar()
         else:
             self._erro("'int' ou 'bool'")
 
-    def declaracao_subrotina(self):
+    def declaracao_subrotina(self) -> None:
         eh_funcao = self.atual.tipo == "func"
-        self._avancar()  # proc ou func
+        self._avancar()
         self._consumir("IDENT")
         self._consumir("(")
         if self.atual.tipo == "IDENT":
@@ -94,46 +139,53 @@ class AnalisadorSintatico:
             self.tipo()
         self.corpo_subrotina()
 
-    def corpo_subrotina(self):
-        # Ajuste em relação à BNF original: no exemplo, as variáveis de
-        # proc/func ficam DENTRO das chaves.
+    def corpo_subrotina(self) -> None:
         self._consumir("{")
         while self.atual.tipo == "var":
-            self.declaracao_variavel()
-            self._consumir(";")
+            try:
+                self.declaracao_variavel()
+                self._consumir(";")
+            except ErroSintatico as erro:
+                self._registrar_e_sincronizar(erro)
         while self.atual.tipo in ("proc", "func"):
-            self.declaracao_subrotina()
+            try:
+                self.declaracao_subrotina()
+            except ErroSintatico as erro:
+                self._registrar_e_sincronizar(erro)
         self.lista_comandos()
         self._consumir("}")
 
-    def lista_parametros(self):
+    def lista_parametros(self) -> None:
         self.parametro()
         while self.atual.tipo == ",":
             self._avancar()
             self.parametro()
 
-    def parametro(self):
+    def parametro(self) -> None:
         self._consumir("IDENT")
         self.tipo()
 
     # ---------- comandos ----------
-    def comandos(self):
+    def comandos(self) -> None:
         self._consumir("{")
         self.lista_comandos()
         self._consumir("}")
 
-    def lista_comandos(self):
+    def lista_comandos(self) -> None:
         while self.atual.tipo in PRIMEIRO_COMANDO:
-            self.comando()
+            try:
+                self.comando()
+            except ErroSintatico as erro:
+                self._registrar_e_sincronizar(erro)
 
-    def comando(self):
+    def comando(self) -> None:
         if self.atual.tipo in ("if", "while", "{"):
             self.comando_estruturado()
         else:
             self.comando_simples()
             self._consumir(";")
 
-    def comando_simples(self):
+    def comando_simples(self) -> None:
         t = self.atual.tipo
         if t == "IDENT":
             self.comando_iniciado_por_identificador()
@@ -146,7 +198,7 @@ class AnalisadorSintatico:
         else:
             self._erro("comando")
 
-    def comando_estruturado(self):
+    def comando_estruturado(self) -> None:
         t = self.atual.tipo
         if t == "if":
             self.comando_condicional()
@@ -155,9 +207,8 @@ class AnalisadorSintatico:
         else:
             self.comandos()
 
-    def comando_iniciado_por_identificador(self):
+    def comando_iniciado_por_identificador(self) -> None:
         self._consumir("IDENT")
-        # <resto do comando>
         if self.atual.tipo == "=":
             self._avancar()
             self.expressao()
@@ -169,7 +220,7 @@ class AnalisadorSintatico:
         else:
             self._erro("'=' ou '('")
 
-    def comando_condicional(self):
+    def comando_condicional(self) -> None:
         self._consumir("if")
         self.expressao()
         self.comandos()
@@ -177,17 +228,17 @@ class AnalisadorSintatico:
             self._avancar()
             self.comandos()
 
-    def comando_enquanto(self):
+    def comando_enquanto(self) -> None:
         self._consumir("while")
         self.expressao()
         self.comandos()
 
-    def comando_retorno(self):
+    def comando_retorno(self) -> None:
         self._consumir("return")
         if self.atual.tipo in PRIMEIRO_EXPRESSAO:
             self.expressao()
 
-    def comando_escrita(self):
+    def comando_escrita(self) -> None:
         self._consumir("print")
         self._consumir("(")
         if self.atual.tipo == "CADEIA":
@@ -196,51 +247,51 @@ class AnalisadorSintatico:
             self.expressao()
         self._consumir(")")
 
-    def lista_argumentos(self):
+    def lista_argumentos(self) -> None:
         self.expressao()
         while self.atual.tipo == ",":
             self._avancar()
             self.expressao()
 
     # ---------- expressões ----------
-    def expressao(self):
+    def expressao(self) -> None:
         self.expressao_ou()
 
-    def expressao_ou(self):
+    def expressao_ou(self) -> None:
         self.expressao_e()
         while self.atual.tipo == "or":
             self._avancar()
             self.expressao_e()
 
-    def expressao_e(self):
+    def expressao_e(self) -> None:
         self.expressao_relacional()
         while self.atual.tipo == "and":
             self._avancar()
             self.expressao_relacional()
 
-    def expressao_relacional(self):
+    def expressao_relacional(self) -> None:
         self.expressao_aritmetica()
         if self.atual.tipo in OPERADORES_RELACIONAIS:
             self._avancar()
             self.expressao_aritmetica()
 
-    def expressao_aritmetica(self):
+    def expressao_aritmetica(self) -> None:
         self.termo()
         while self.atual.tipo in ("+", "-"):
             self._avancar()
             self.termo()
 
-    def termo(self):
+    def termo(self) -> None:
         self.fator()
         while self.atual.tipo in ("*", "/"):
             self._avancar()
             self.fator()
 
-    def fator(self):
+    def fator(self) -> None:
         t = self.atual.tipo
         if t == "IDENT":
             self._avancar()
-            if self.atual.tipo == "(":  # chamada de função
+            if self.atual.tipo == "(":
                 self._avancar()
                 if self.atual.tipo in PRIMEIRO_EXPRESSAO:
                     self.lista_argumentos()

@@ -1,0 +1,24 @@
+program Escopos;
+
+var global int;
+
+proc externo()
+{
+    var localExterna int;
+    proc interno()
+    {
+        var localInterna int;
+        localInterna = 2;
+        localExterna = localInterna + 1;
+        global = localExterna;
+    }
+    localExterna = 0;
+    interno();
+}
+
+{
+    global = 1;
+    externo();
+    print(global);
+}
+.

@@ -1,12 +1,13 @@
 # Definição de Token e das palavras reservadas da linguagem.
 
 from dataclasses import dataclass
+from typing import FrozenSet
 
-PALAVRAS_RESERVADAS = {
+PALAVRAS_RESERVADAS: FrozenSet[str] = frozenset({
     "program", "var", "func", "proc", "int", "bool", "if", "else",
     "while", "return", "break", "continue", "print", "true", "false",
     "and", "or",
-}
+})
 
 
 @dataclass
@@ -20,3 +21,4 @@ class Token:
     lexema: str
     linha: int
     coluna: int
+    trecho: str = ""

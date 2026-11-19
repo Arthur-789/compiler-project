@@ -1,0 +1,7 @@
+program ErroIdentificador;
+
+var _x int;
+
+{
+}
+.

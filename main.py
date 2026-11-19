@@ -2,15 +2,17 @@
 
 import argparse
 import sys
+from typing import Optional, Sequence
+
 from compilador.analisador_lexico import AnalisadorLexico, ErroLexico
 from compilador.analisador_sintatico import AnalisadorSintatico, ErroSintatico
 
 
-def main():
+def main(argv: Optional[Sequence[str]] = None) -> int:
     ap = argparse.ArgumentParser(description="Analisadores léxico e sintático.")
     ap.add_argument("arquivo", help="arquivo com o código-fonte")
     ap.add_argument("--tokens", action="store_true", help="exibe a tabela de tokens")
-    args = ap.parse_args()
+    args = ap.parse_args(argv)
 
     try:
         with open(args.arquivo, encoding="utf-8-sig") as f:

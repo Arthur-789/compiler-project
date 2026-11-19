@@ -1,14 +1,16 @@
 # Analisador léxico - transforma o código-fonte em uma lista de tokens.
 
 import string
+from typing import List, NoReturn, Set
+
 from .tokens import PALAVRAS_RESERVADAS, Token
 
-SIMBOLOS_DUPLOS = {"==", "!=", ">=", "<="}
-SIMBOLOS_SIMPLES = set("+-*/=<>!(){};,.")
-ESPACOS = {" ", "\t", "\r", "\n"}
+SIMBOLOS_DUPLOS: Set[str] = {"==", "!=", ">=", "<="}
+SIMBOLOS_SIMPLES: Set[str] = set("+-*/=<>!(){};,.")
+ESPACOS: Set[str] = {" ", "\t", "\r", "\n"}
 
 # Caracteres permitidos dentro de uma cadeia
-CARACTERES_CADEIA = (
+CARACTERES_CADEIA: Set[str] = (
     set(string.ascii_letters + string.digits + "!#$%&'()*+,-./:;<=>?@_[]{}|")
     | {" "}
 )
@@ -19,20 +21,21 @@ class ErroLexico(Exception):
 
 
 class AnalisadorLexico:
-    def __init__(self, codigo):
+    def __init__(self, codigo: str) -> None:
         self.codigo = codigo
+        self.linhas = codigo.split("\n")
         self.pos = 0
         self.linha = 1
         self.coluna = 1
 
     # ---------- utilidades ----------
-    def _atual(self):
+    def _atual(self) -> str:
         return self.codigo[self.pos] if self.pos < len(self.codigo) else ""
 
-    def _proximo(self):
+    def _proximo(self) -> str:
         return self.codigo[self.pos + 1] if self.pos + 1 < len(self.codigo) else ""
 
-    def _avancar(self):
+    def _avancar(self) -> str:
         c = self.codigo[self.pos]
         self.pos += 1
         if c == "\n":
@@ -42,29 +45,38 @@ class AnalisadorLexico:
             self.coluna += 1
         return c
 
-    def _erro(self, mensagem, linha, coluna):
-        raise ErroLexico(f"Linha {linha}, coluna {coluna}: {mensagem}")
+    def _erro(self, mensagem: str, linha: int, coluna: int) -> NoReturn:
+        trecho = self.linhas[linha - 1] if linha <= len(self.linhas) else ""
+        ponteiro = " " * max(coluna - 1, 0) + "^"
+        raise ErroLexico(
+            f"Linha {linha}, coluna {coluna}: {mensagem}\n"
+            f"{trecho}\n{ponteiro}"
+        )
 
     @staticmethod
-    def _eh_letra(c):
+    def _eh_letra(c: str) -> bool:
         return c.isascii() and c.isalpha()
 
     @staticmethod
-    def _eh_digito(c):
+    def _eh_digito(c: str) -> bool:
         return c.isascii() and c.isdigit()
 
     # ---------- análise ----------
-    def tokenizar(self):
-        tokens = []
+    def tokenizar(self) -> List[Token]:
+        tokens: List[Token] = []
         while True:
             self._ignorar_espacos_e_comentarios()
             if self.pos >= len(self.codigo):
                 break
             tokens.append(self._proximo_token())
-        tokens.append(Token("EOF", "", self.linha, self.coluna))
+        tokens.append(self._token("EOF", "", self.linha, self.coluna))
         return tokens
 
-    def _ignorar_espacos_e_comentarios(self):
+    def _token(self, tipo: str, lexema: str, linha: int, coluna: int) -> Token:
+        trecho = self.linhas[linha - 1] if linha <= len(self.linhas) else ""
+        return Token(tipo, lexema, linha, coluna, trecho)
+
+    def _ignorar_espacos_e_comentarios(self) -> None:
         while True:
             c = self._atual()
             if c in ESPACOS:
@@ -75,7 +87,7 @@ class AnalisadorLexico:
             else:
                 break
 
-    def _proximo_token(self):
+    def _proximo_token(self) -> Token:
         linha, coluna = self.linha, self.coluna
         c = self._atual()
 
@@ -90,36 +102,37 @@ class AnalisadorLexico:
         if par in SIMBOLOS_DUPLOS:
             self._avancar()
             self._avancar()
-            return Token(par, par, linha, coluna)
+            return self._token(par, par, linha, coluna)
         if c in SIMBOLOS_SIMPLES:
             self._avancar()
-            return Token(c, c, linha, coluna)
+            return self._token(c, c, linha, coluna)
 
         self._erro(f"caractere inválido '{c}'", linha, coluna)
 
-    def _identificador(self, linha, coluna):
-        lexema = ""
+    def _identificador(self, linha: int, coluna: int) -> Token:
+        partes: List[str] = []
         while self._eh_letra(self._atual()) or self._eh_digito(self._atual()) or self._atual() == "_":
-            lexema += self._avancar()
+            partes.append(self._avancar())
+        lexema = "".join(partes)
         tipo = lexema if lexema in PALAVRAS_RESERVADAS else "IDENT"
-        return Token(tipo, lexema, linha, coluna)
+        return self._token(tipo, lexema, linha, coluna)
 
-    def _numero(self, linha, coluna):
-        lexema = ""
+    def _numero(self, linha: int, coluna: int) -> Token:
+        partes: List[str] = []
         while self._eh_digito(self._atual()):
-            lexema += self._avancar()
-        return Token("NUM", lexema, linha, coluna)
+            partes.append(self._avancar())
+        return self._token("NUM", "".join(partes), linha, coluna)
 
-    def _cadeia(self, linha, coluna):
+    def _cadeia(self, linha: int, coluna: int) -> Token:
         self._avancar()  # abre aspas
-        conteudo = ""
+        partes: List[str] = []
         while True:
             c = self._atual()
             if c == "" or c == "\n":
                 self._erro("cadeia não terminada (faltou fechar aspas)", linha, coluna)
             if c == '"':
                 self._avancar()  # fecha aspas
-                return Token("CADEIA", conteudo, linha, coluna)
+                return self._token("CADEIA", "".join(partes), linha, coluna)
             if c not in CARACTERES_CADEIA:
                 self._erro(f"caractere inválido '{c}' dentro da cadeia", self.linha, self.coluna)
-            conteudo += self._avancar()
+            partes.append(self._avancar())

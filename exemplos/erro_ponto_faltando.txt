@@ -1,0 +1,5 @@
+program ErroPonto;
+
+{
+    print("programa sem ponto final");
+}

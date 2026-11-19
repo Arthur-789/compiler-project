@@ -1,0 +1,29 @@
+program Funcoes;
+
+var x int;
+var y int;
+
+func ajustar(valor int, fator int) int
+{
+    var local int;
+    local = valor * fator + 1;
+    return local;
+}
+
+func maior(a int, b int) bool
+{
+    var resposta bool;
+    resposta = a > b;
+    return resposta;
+}
+
+{
+    x = ajustar(3, 4) + ajustar(1, 2);
+    y = ajustar(x, 2);
+    if maior(y, x) {
+        print(y);
+    } else {
+        print(x);
+    }
+}
+.

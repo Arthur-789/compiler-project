@@ -1,0 +1,27 @@
+program Procedimentos;
+
+var total int;
+
+proc registrar(valor int)
+{
+    total = total + valor;
+}
+
+proc externo(inicial int)
+{
+    var local int;
+    proc interno(primeiro int, segundo int)
+    {
+        registrar(primeiro + segundo);
+    }
+    local = inicial * 2;
+    interno(local, inicial);
+}
+
+{
+    total = 0;
+    externo(5);
+    registrar(3);
+    print(total);
+}
+.
